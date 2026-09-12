@@ -1,0 +1,36 @@
+# --- Datasets and run outputs -------------------------------------------------
+# The KlaskTron-IL dataset is distributed via Hugging Face, not via git.
+# `data/` is ignored except for the conversion pipeline and its documentation.
+# NOTE: these are anchored with a leading "/" so they match only the top-level
+# directories. An unanchored "data/" also matches nested packages such as
+# klask_imitation/klasktron/data/, which silently excluded the dataset
+# download module from earlier revisions of this repository.
+/data/*
+!/data/README.md
+!/data/convert.py
+!/data/convert_all_bags.sh
+
+/trained_models/
+/artifacts/
+/legacy_models/
+/outputs/
+klask_imitation/scripts/outputs/
+wandb/
+.hydra/
+
+# --- Python -------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- Editors, tooling, OS ------------------------------------------------------
+.vscode/
+.idea/
+.claude/
+.codex
+.DS_Store

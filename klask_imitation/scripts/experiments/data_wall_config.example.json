@@ -1,0 +1,51 @@
+{
+  "output_root": "~/klask_imitation_learning/artifacts/data_wall/eval_runs",
+  "human_demo_base": "~/klask_imitation_learning/data/expert_trajectories_cleaned",
+  "human_baseline_steps": 81455,
+  "synthetic_scales": [
+    80000,
+    250000,
+    1000000,
+    5000000
+  ],
+  "seed": 42,
+  "python_bin": "python",
+  "experts": [
+    {
+      "expert_id": "ppo_expert",
+      "policy_path": "~/IsaacLab/logs/rl_games/klask/demo_agents/best_one/klask.pth",
+      "policy_format": "rl_games",
+      "mode": "peg1_fixed_opponent",
+      "opponent_policy_path": "~/IsaacLab/logs/rl_games/klask/demo_agents/best_one/klask.pth",
+      "opponent_policy_format": "sb3_ppo",
+      "deterministic_expert": true,
+      "deterministic_opponent": true,
+      "invert_opponent_actions": true,
+      "mirror_opponent_x": false,
+      "mirror_opponent_y": false,
+      "rl_games_task": "Isaac-Klask-v0",
+      "rl_games_config_path": "~/IsaacLab/logs/rl_games/klask/demo_agents/best_one/agent.yaml"
+    }
+  ],
+  "bc": {
+    "device": "cuda:0",
+    "augment": true
+  },
+  "gail": {
+    "device": "cuda:0",
+    "num_envs": 4096,
+    "timesteps": 5000000,
+    "no_tune": true
+  },
+  "eval": {
+    "episodes": 800,
+    "num_envs": 300,
+    "device": "cuda:0"
+  },
+  "aggregate": {
+    "primary_metric": "mean_env_reward",
+    "plateau_improvement_threshold": 0.05,
+    "control_hz": 50.0,
+    "human_overhead_factor": 2.0
+  }
+}

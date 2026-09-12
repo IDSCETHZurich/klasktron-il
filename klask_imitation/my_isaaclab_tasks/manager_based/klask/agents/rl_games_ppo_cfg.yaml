@@ -1,0 +1,94 @@
+###########################################
+# RL Games Config Parameters
+###########################################
+
+params:
+  seed: 42
+
+  env:
+    clip_observations: 5.0
+    clip_actions: 1.0
+
+  algo:
+    name: a2c_continuous
+
+  model:
+    name: continuous_a2c_logstd
+
+  network:
+    name: actor_critic
+    # if true, actor and critic use completely separate networks, else they share weights:
+    separate: False
+    space:
+      continuous:
+        mu_activation: None
+        sigma_activation: None
+
+        mu_init:
+          name: default
+        sigma_init:
+          name: const_initializer
+          val: 0
+        fixed_sigma: True
+    mlp:
+      units: [32, 32]
+      activation: elu
+      d2rl: False
+
+      initializer:
+        name: default
+      regularizer:
+        name: None
+
+  load_checkpoint: False # flag which sets whether to load the checkpoint
+  load_path: '' # path to the checkpoint to load
+
+  config:
+    full_experiment_name: test
+    name: klask
+    env_name: rlgpu
+    device: 'cuda:0'
+    device_name: 'cuda:0'
+    multi_gpu: False
+    ppo: True
+    mixed_precision: False
+    normalize_input: False
+    normalize_value: False
+    num_actors: -1  # configured from the script (based on num_envs)
+    reward_shaper:
+      scale_value: 1.0
+    normalize_advantage: False
+    gamma: 0.99
+    tau : 0.95
+    learning_rate: 3e-4
+    lr_schedule: adaptive
+    kl_threshold: 0.008
+    # total number of epochs:    
+    max_epochs: -1
+    # number of environment steps; overrides max_epochs:
+    max_frames: !!int 5_000_000
+    save_best_after: 50
+    save_frequency: 25
+    grad_norm: 1.0
+    entropy_coef: 0.0
+    truncate_grads: True
+    e_clip: 0.2
+    # number of env steps in each environment between each PPO update
+    horizon_length: 16
+    minibatch_size: 4096
+    mini_epochs: 8
+    critic_coef: 4
+    clip_value: True
+    seq_length: 4
+    # loss for penalizing actions at the limits of -1 and 1:
+    bounds_loss_coef: 0.0001
+    # whether to use self-play; if false, a randomly moving opponent is used:
+    self_play: False
+    # if self_play is true, a self-play config needs to be provided:
+    #self_play_config:
+      # threshold for the game score at which the opponent is updated:
+      #update_score: -100.0
+      # minimum number of games after which the opponent is updated:
+      #games_to_check: 1
+      # not used in the current implementation, but required by rl_games:
+      #env_update_num: 4096
