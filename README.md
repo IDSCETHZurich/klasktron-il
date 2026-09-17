@@ -110,6 +110,16 @@ python klask_imitation/scripts/training/train_gail_sweep.py --config configs/tra
 python klask_imitation/scripts/training/train_bc_sweep.py
 ```
 
+Pass `--seed` once per seed to build a multi-seed sweep; the script trains one
+configuration per invocation.
+
+> **Figure 3 pre-dates this release.** The published Figure 3 (BC data scaling,
+> five seeds per scale) was produced on 2026-05-27, before this repository was
+> assembled, and its run artifacts are not included here. The script above
+> reproduces the training side of that experiment, but the figure itself cannot be
+> regenerated from the released code and checkpoints. The published values are the
+> record of that run rather than an output of this repository.
+
 ### Sparse RL (bootstrapped from BC/GAIL policy)
 
 ```bash
@@ -195,6 +205,47 @@ print(result.valid, result.n_trajectories, result.n_steps)
 
 See [docs/reestimation_integration.md](docs/reestimation_integration.md) for details.
 
+## Reproducing the paper
+
+| Paper artifact | How to reproduce | Status |
+|---|---|---|
+| Table 1 (dataset tiers) | `klasktron-download-data --tier all` | reproducible |
+| Sec. 5.2 BC hyperparameters | `train_BC_only.py --config configs/training/bc_baseline.json` | reproducible |
+| Figure 2 (peg occupancy) | `evaluate_gail_results.py` writes `heatmap_agent_*.npy` | reproducible |
+| Sec. 5.3 GAIL training | `train_gail_sweep.py --config configs/training/gail_baseline.json` | reproducible |
+| Figure 4 (discriminator probe) | `run_gail_discriminator_analysis.py` | reproducible |
+| Sec. 5.4 / Figure 5 (BC+RL 2x2) | `run_bcrl_multiseed.py` then `make_fig5.py` | reproducible |
+| Appendix A / B hyperparameters | `configs/training/*.json` | reproducible |
+| Actuator model, +-0.2 m/s identification range | deployed checkpoint ships in `klask_imitation/my_isaaclab_tasks/manager_based/klask/actuator_model/` (md5 `18812843f6f4cb45de2f12ebb879c7d6`) | artifact included; identification data and training code are not part of this release |
+| Figure 3 (BC data scaling) | training side only, via `train_bc_sweep.py` | **not reproducible** |
+| Table 2 / Table 3, BC and GAIL rows | retrain from the shipped configs | **not reproducible as published** |
+| BC-5M hardware deployment | - | **not in this repository** |
+
+### The frozen PPO expert
+
+The PPO expert is inherited unchanged from the platform work and ships with this
+repository at `klask_imitation/assets/ppo_expert/`, so evaluations against it run
+without an external checkout. Override the location with `PPO_EXPERT_DIR` if you want
+to point at your own copy.
+
+`klask.pth` was saved from `cuda:2`; if you run under `CUDA_VISIBLE_DEVICES` masking it
+will fail to deserialise, and `klask_cpu_mapped.pth` (identical weights) should be used
+instead. See [the asset README](klask_imitation/assets/ppo_expert/README.md) for the
+expert's 20-D observation interface and its `clip_actions: 0.2` command bound.
+
+### What this repository cannot reproduce
+
+- **Figure 3 (BC data scaling)** was produced on 2026-05-27, before this repository was
+  assembled, and its run artifacts were not preserved. `train_bc_sweep.py` reproduces
+  the training side; the published figure itself cannot be regenerated from this code.
+- **The specific BC and GAIL checkpoints behind Tables 2 and 3** were not preserved.
+  The shipped configs retrain equivalent policies, but per-seed numbers will differ from
+  the published ones.
+- **The BC-5M zero-shot hardware deployment** reported in the author response runs on the
+  separate robot software stack and is outside this repository.
+- Evaluations in the paper marked as self-play (Tables 2 and 3, BC and GAIL rows) were not
+  re-run against the frozen PPO expert; the paper states this explicitly.
+
 ## Repository Layout
 
 ```
@@ -206,23 +257,36 @@ klask_imitation/
   scripts/eval/             # evaluation scripts
   scripts/experiments/      # synthetic data, data-wall
   scripts/plotting/         # paper figures (make_fig5.py = Fig. 5)
-  scripts/play.py           # visualization / play script
+  assets/ppo_expert/        # frozen PPO expert (inherited, see [7])
+  scripts/tests/play.py     # visualization / play script
 data/                       # datasets (not in git)
-trained_models/             # checkpoints
-artifacts/                  # eval outputs, plots
+trained_models/             # checkpoints (created at runtime)
+artifacts/                  # eval outputs, plots (created at runtime)
 docs/figures/               # camera-ready figures
 ```
 
 ## Citation
 
-<!-- TODO(camera-ready): fill in the author list before making this repository public. -->
+```bibtex
+@inproceedings{klasktronil2026,
+  title     = {KlaskTron-IL: A Contact-Rich Adversarial Imitation Learning
+               Benchmark with a Validated Sim-to-Real Bridge},
+  author    = {Sohm, Nicklas and Ramachandran, Aswin and D'Andrea, Raffaello},
+  booktitle = {Conference on Robot Learning (CoRL)},
+  year      = {2026}
+}
+```
+
+The platform this benchmark builds on -- the hardware, the Isaac Lab environment, the
+learned actuator model and the PPO expert, all inherited unchanged (see [NOTICE](NOTICE)):
 
 ```bibtex
 @inproceedings{klasktron2026,
-  title     = {KlaskTron-IL: A Contact-Rich Adversarial Imitation Learning
-               Benchmark with a Validated Sim-to-Real Bridge},
-  author    = {FILL IN AUTHOR LIST},
-  booktitle = {Conference on Robot Learning (CoRL)},
+  title     = {KlaskTron: An Open-Source Platform for Physical Adversarial
+               Multi-Agent RL},
+  author    = {Ramachandran, Aswin and Schulz, Jona and Derungs, Maurus and
+               Angelini, Carlo and Meier, Tobias and D'Andrea, Raffaello},
+  booktitle = {Robotics: Science and Systems (RSS)},
   year      = {2026}
 }
 ```

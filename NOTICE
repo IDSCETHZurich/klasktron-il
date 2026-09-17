@@ -35,6 +35,27 @@ Isaac Lab
   https://github.com/isaac-sim/IsaacLab/blob/main/LICENSE
 
 --------------------------------------------------------------------------------
+INHERITED PLATFORM ARTIFACTS
+--------------------------------------------------------------------------------
+
+The following trained artifacts originate from the KlaskTron platform work
+(reference [7] in the accompanying paper) and are redistributed here unchanged so
+that this repository's experiments are runnable without an external checkout. They
+are not contributions of KlaskTron-IL.
+
+  klask_imitation/assets/ppo_expert/klask.pth
+  klask_imitation/assets/ppo_expert/klask_cpu_mapped.pth
+  klask_imitation/assets/ppo_expert/agent.yaml
+    The frozen PPO self-play agent used as the demonstration source for dataset
+    Tier 3 and as the fixed reference opponent for closed-loop evaluation.
+
+  klask_imitation/my_isaaclab_tasks/manager_based/klask/actuator_model/*.pt
+    Learned actuator models identified on the physical robot. The checkpoint
+    deployed throughout this work is
+    model_odrive_new_estimator_history_10_interval_0.02_delay_0.0_horizon3_with_states.pt
+    (md5 18812843f6f4cb45de2f12ebb879c7d6).
+
+--------------------------------------------------------------------------------
 
 The KlaskTron-IL dataset is distributed separately from this source repository
 and is licensed under CC-BY-4.0. See dataset_card.md.

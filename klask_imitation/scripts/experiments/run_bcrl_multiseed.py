@@ -61,8 +61,10 @@ TRAIN_SCRIPT = str(KLASKTRON_ROOT / "klask_imitation" / "scripts" / "training" /
 EVAL_SCRIPT = str(KLASKTRON_ROOT / "klask_imitation" / "scripts" / "eval" / "evaluate_gail_results.py")
 
 # The frozen PPO reference opponent (Elo 1283) every simulated metric is scored against.
+# The frozen PPO expert ships with this repository (klask_imitation/assets/ppo_expert).
+# Override PPO_EXPERT_DIR to point at an external checkout instead.
 PPO_EXPERT_DIR = os.environ.get(
-    "PPO_EXPERT_DIR", f"{ISAACLAB_ROOT}/logs/rl_games/klask/demo_agents/best_one")
+    "PPO_EXPERT_DIR", str(KLASKTRON_ROOT / "klask_imitation" / "assets" / "ppo_expert"))
 PPO_EXPERT_CKPT = f"{PPO_EXPERT_DIR}/klask.pth"
 PPO_EXPERT_CFG = f"{PPO_EXPERT_DIR}/agent.yaml"
 
