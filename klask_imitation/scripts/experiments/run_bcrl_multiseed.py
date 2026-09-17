@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""BC+RL 2x2 multi-seed sweep for the CoRL #1416 camera-ready (rebuttal promise #7).
+"""BC+RL 2x2 multi-seed sweep (Figure 5, Table 2 BC+RL rows, Section 5.4).
 
 Retrains {random, BC-init} x {sparse, dense} across seeds so that Fig. 5, the two
 BC+RL rows of Table 2 and every number in 5.4 carry seed-level error bars. The
@@ -54,7 +54,10 @@ ISAACLAB_ROOT = os.environ.get("ISAACLAB_ROOT", str(_HOME / "IsaacLab"))
 PYTHON_BIN = os.environ.get("PYTHON_BIN", "python")
 CONDA_SH = os.environ.get("CONDA_SH", str(_HOME / "miniconda3/etc/profile.d/conda.sh"))
 CONDA_ENV = os.environ.get("CONDA_ENV", "env_isaaclab")
-ROS_SETUP = os.environ.get("ROS_SETUP", str(_HOME / "ros2_ws/install/setup.bash"))
+# Optional. Only needed if your Isaac Lab env depends on a ROS 2 overlay; it is not
+# required to train or evaluate any baseline in this repository. Sourced only when set
+# and present, so a missing workspace cannot silently break the && chain below.
+ROS_SETUP = os.environ.get("ROS_SETUP", "")
 ISAACLAB_CWD = ISAACLAB_ROOT
 
 TRAIN_SCRIPT = str(KLASKTRON_ROOT / "klask_imitation" / "scripts" / "training" / "train_GAIL_BC_sparse_RL.py")
@@ -110,13 +113,15 @@ def _iso_now() -> str:
 
 def wrap_in_env(cmd: Sequence[str]) -> List[str]:
     inner = " ".join(f"'{c}'" if " " in c else c for c in cmd)
-    script = (
-        f"source {CONDA_SH} && conda activate {CONDA_ENV} && "
-        f'export COLCON_TRACE="${{COLCON_TRACE:-0}}" && '
-        f'export AMENT_TRACE_SETUP_FILES="${{AMENT_TRACE_SETUP_FILES:-}}" && '
-        f"set +u && source {ROS_SETUP} && set -u && exec {inner}"
-    )
-    return ["bash", "-c", script]
+    parts = [f"source {CONDA_SH}", f"conda activate {CONDA_ENV}"]
+    if ROS_SETUP and os.path.isfile(ROS_SETUP):
+        parts += [
+            'export COLCON_TRACE="${COLCON_TRACE:-0}"',
+            'export AMENT_TRACE_SETUP_FILES="${AMENT_TRACE_SETUP_FILES:-}"',
+            f"set +u && source {ROS_SETUP} && set -u",
+        ]
+    parts.append(f"exec {inner}")
+    return ["bash", "-c", " && ".join(parts)]
 
 
 def run_jobs(tasks: List[Tuple[str, List[str]]], *, devices: List[str], log_dir: Path,
