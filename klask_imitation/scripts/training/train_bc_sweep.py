@@ -44,7 +44,7 @@ _TRAINED_MODELS_DIR = Path(
 )
 
 DEFAULTS: Dict[str, Any] = {
-    "demo_base": str(_DATA_DIR / "expert_trajectories_cleaned"),
+    "demo_base": str(_DATA_DIR / "human" / "trajectories"),
     "demo_source_format": DEMO_SOURCE_HUMAN_RAW,
     "save_root": str(_TRAINED_MODELS_DIR),
     "run_tag": "BC_SWEEP",
@@ -605,4 +605,20 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # Isaac Sim's shutdown path swallows the process exit status, so a crash
+    # here would otherwise be reported as success to any caller (CI, the
+    # experiment launchers, shell scripts). Flush and exit explicitly.
+    import os as _os
+    import sys as _sys
+    import traceback as _tb
+
+    try:
+        main()
+    except BaseException:
+        _tb.print_exc()
+        _sys.stdout.flush()
+        _sys.stderr.flush()
+        _os._exit(1)
+    _sys.stdout.flush()
+    _sys.stderr.flush()
+    _os._exit(0)

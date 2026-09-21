@@ -5,7 +5,7 @@
   "run_name": null,
   "wandb_project": "klask_dense_rl",
   "wandb_entity": null,
-  "wandb_mode": "online",
+  "wandb_mode": "disabled",
   "total_timesteps": 50000000,
   "train_num_envs": 4096,
   "device": "cuda:0",

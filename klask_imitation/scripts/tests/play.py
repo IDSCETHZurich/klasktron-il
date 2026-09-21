@@ -94,6 +94,13 @@ from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent
 from isaaclab_rl.rl_games import RlGamesGpuEnv, RlGamesVecEnvWrapper
 
 import my_isaaclab_tasks.manager_based.klask  # registers Isaac-Klask-v0
+
+from klasktron.rl_games_obs import (  # noqa: E402
+    _augment_local_obs_to_expected_dim,
+    _build_env_info_for_dims,
+    _infer_action_dim_from_rl_games_checkpoint,
+    _infer_obs_dim_from_rl_games_checkpoint,
+)
 from my_isaaclab_tasks.manager_based.klask.env_cfg import EnvCfg
 from my_isaaclab_tasks.manager_based.klask.env_wrapper import (
     ActionHistoryWrapper,
@@ -191,6 +198,56 @@ def resolve_policy_format(raw_fmt: Optional[str], checkpoint: str) -> str:
     return inferred
 
 
+class RlGamesObsAdapter:
+    """Feed an RL-Games player the observation width its checkpoint expects.
+
+    The Klask env emits the 12-D benchmark state, but a checkpoint may have been
+    trained on a wider observation -- the bundled PPO expert uses 20 dims: the
+    12-D state plus eight engineered geometric channels. Rebuilding those eight
+    is the only correct way to drive it; padding with zeros, or substituting a
+    different 8-wide signal such as an action history, matches the shape while
+    feeding the network values it never saw in training.
+    """
+
+    def __init__(
+        self, player: Any, *, expected_obs_dim: int, action_dim: int, device: str
+    ):
+        self._player = player
+        self.expected_obs_dim = int(expected_obs_dim)
+        self.action_dim = int(action_dim)
+        # The env and the player must agree on a device: rl_games can place a
+        # restored player on its own default, which then fails when the action
+        # is concatenated with the learner's on a different GPU.
+        self.device = torch.device(device)
+
+    def __getattr__(self, name: str) -> Any:
+        # Everything not overridden here (reset, is_rnn, init_rnn,
+        # has_batch_dimension, ...) delegates to the wrapped player.
+        return getattr(self._player, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in {"_player", "expected_obs_dim", "action_dim", "device"}:
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._player, name, value)
+
+    def obs_to_torch(self, obs: Any) -> torch.Tensor:
+        obs_np = _augment_local_obs_to_expected_dim(
+            ensure_2d(obs, dtype=np.float32), self.expected_obs_dim
+        )
+        return self._player.obs_to_torch(
+            torch.as_tensor(obs_np, dtype=torch.float32, device=self.device)
+        )
+
+    def get_action(self, obs: Any, is_deterministic: bool = True) -> torch.Tensor:
+        acts = self._player.get_action(obs, is_deterministic=bool(is_deterministic))
+        if not torch.is_tensor(acts):
+            acts = torch.as_tensor(acts, dtype=torch.float32)
+        if acts.ndim == 1:
+            acts = acts.unsqueeze(0)
+        return acts[:, : max(1, self.action_dim)].to(self.device)
+
+
 def build_runner_player(
     *,
     agent_cfg: Dict[str, Any],
@@ -208,6 +265,35 @@ def build_runner_player(
     if "device_name" in agent_cfg["params"]["config"]:
         agent_cfg["params"]["config"]["device_name"] = device
 
+    # Size the network from the checkpoint rather than from the env. The env
+    # reports 12 observations; a checkpoint such as the bundled PPO expert was
+    # trained on 20. Building from the env would make restore() fail on a shape
+    # mismatch, which is what used to make the expert unloadable here.
+    ckpt_obs_dim = None
+    ckpt_action_dim = None
+    try:
+        ckpt_obs_dim = int(_infer_obs_dim_from_rl_games_checkpoint(checkpoint))
+        ckpt_action_dim = int(_infer_action_dim_from_rl_games_checkpoint(checkpoint))
+        agent_cfg["params"]["config"]["env_info"] = _build_env_info_for_dims(
+            observation_space=gym.spaces.Box(
+                low=-np.inf, high=np.inf, shape=(ckpt_obs_dim,), dtype=np.float32
+            ),
+            action_space=gym.spaces.Box(
+                low=-1.0, high=1.0, shape=(ckpt_action_dim,), dtype=np.float32
+            ),
+            action_dim=ckpt_action_dim,
+            obs_dim=ckpt_obs_dim,
+        )
+        agent_cfg["params"]["config"]["vec_env"] = None
+        print(
+            f"[setup] rl_games checkpoint expects obs_dim={ckpt_obs_dim}, "
+            f"action_dim={ckpt_action_dim}"
+        )
+    except Exception as exc:
+        print(f"[warn] could not infer checkpoint dims ({exc}); using env dims.")
+        ckpt_obs_dim = None
+        ckpt_action_dim = None
+
     runner = Runner()
     runner.load(agent_cfg)
     agent = runner.create_player()
@@ -224,8 +310,27 @@ def build_runner_player(
     agent.reset()
     agent.device = torch.device(device)
     agent.model.to(device)
-    agent.actions_low = agent.actions_low.to(device)
-    agent.actions_high = agent.actions_high.to(device)
+    if ckpt_action_dim is not None:
+        agent.actions_low = agent.actions_low[:ckpt_action_dim].to(device)
+        agent.actions_high = agent.actions_high[:ckpt_action_dim].to(device)
+    else:
+        agent.actions_low = agent.actions_low.to(device)
+        agent.actions_high = agent.actions_high.to(device)
+    if ckpt_obs_dim is not None:
+        # One explicit batch-size probe so batched observations are not treated
+        # as a single unbatched sample.
+        probe = torch.zeros(
+            (max(1, int(num_envs)), int(ckpt_obs_dim)),
+            dtype=torch.float32,
+            device=agent.device,
+        )
+        agent.get_batch_size(probe, 1)
+        agent = RlGamesObsAdapter(
+            agent,
+            expected_obs_dim=int(ckpt_obs_dim),
+            action_dim=int(ckpt_action_dim),
+            device=device,
+        )
     return runner, agent
 
 
@@ -515,13 +620,31 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Isaac Sim's shutdown path swallows the process exit status and can drop
+    # buffered stdout, so flush and exit explicitly.
+    import os as _os
+    import sys as _sys
+    import traceback as _tb
+
     try:
         main()
-    except Exception as exc:
+    except BaseException as exc:
         print(f"[error] {exc}")
-        raise
-    finally:
-        try:
-            simulation_app.close()
-        except Exception:
-            pass
+        _tb.print_exc()
+        # Flush and exit here rather than falling through to
+        # simulation_app.close(): Isaac's shutdown terminates the process
+        # itself, with status 0, which would report this failure as success
+        # and would discard whatever is still in Python's stdout buffer.
+        _sys.stdout.flush()
+        _sys.stderr.flush()
+        _os._exit(1)
+
+    _sys.stdout.flush()
+    _sys.stderr.flush()
+    try:
+        simulation_app.close()
+    except Exception:
+        pass
+    _sys.stdout.flush()
+    _sys.stderr.flush()
+    _os._exit(0)

@@ -26,6 +26,16 @@ klasktron-download-data --repo-id KlaskLab/klasktron-il-benchmark --tier all
 ```
 
 Datasets land in `./data` by default. Override with `--local-dir` or `KLASKTRON_DATA_DIR`.
+The `--tier` name and the directory it creates differ for the augmented tier:
+
+| `--tier` | lands in | `--demo-base` | `--demo-source-format` |
+|---|---|---|---|
+| `human` | `data/human/trajectories` | `data/human/trajectories` | `human_raw` |
+| `augmented` | `data/human_augmented/trajectories` | `data/human_augmented/trajectories` | `sim_native` |
+| `synthetic` | `data/synthetic/trajectories` | `data/synthetic/trajectories` | `sim_native` |
+
+The default download also writes the dataset card over `data/README.md`; pass
+`--no-docs` to keep the conversion-pipeline notes that ship in this repository.
 
 See [dataset_card.md](dataset_card.md) for format details.
 
@@ -122,14 +132,24 @@ configuration per invocation.
 
 ### Sparse RL (bootstrapped from BC/GAIL policy)
 
+Both variants need a BC checkpoint. It supplies the Peg1 network architecture, and
+because `opponent_init_mode` is `from_pretrained` it also supplies the frozen
+opponent -- so the random-init ablation needs it too. BC run directories are
+timestamped, so train one first and pass its path:
+
 ```bash
-python klask_imitation/scripts/training/train_GAIL_BC_sparse_RL.py --config configs/training/sparse_rl_bootstrap.json
+python klask_imitation/scripts/training/train_BC_only.py --config configs/training/bc_baseline.json
+# -> trained_models/klask_bc_<timestamp>_BC1/ppo_policy_bc_final.zip
+
+python klask_imitation/scripts/training/train_GAIL_BC_sparse_RL.py --config configs/training/sparse_rl_bootstrap.json \
+    --pretrained-policy-path trained_models/klask_bc_<timestamp>_BC1/ppo_policy_bc_final.zip
 ```
 
 Random-init ablation:
 
 ```bash
-python klask_imitation/scripts/training/train_GAIL_BC_sparse_RL.py --config configs/training/sparse_rl_random.json
+python klask_imitation/scripts/training/train_GAIL_BC_sparse_RL.py --config configs/training/sparse_rl_random.json \
+    --pretrained-policy-path trained_models/klask_bc_<timestamp>_BC1/ppo_policy_bc_final.zip
 ```
 
 ### BC+RL 2x2 with error bars (Figure 5)
@@ -140,11 +160,18 @@ scored against the same frozen PPO reference opponent (Elo 1283).
 
 ```bash
 # 4 conditions x 5 seeds = 20 runs; ~70 min each, one run per GPU
-python klask_imitation/scripts/experiments/run_bcrl_multiseed.py --stage train --gpus 0,1,2,3 --resume
-python klask_imitation/scripts/experiments/run_bcrl_multiseed.py --stage eval  --gpus 0,1,2,3 --resume
-python klask_imitation/scripts/experiments/run_bcrl_multiseed.py --stage aggregate
-python klask_imitation/scripts/plotting/make_fig5.py
+# Pin one --run-id across all four stages: the runner otherwise names the sweep
+# after today's date, and a sweep spanning midnight would be split in two.
+RUN_ID=camera_ready_$(date +%Y%m%d)
+python klask_imitation/scripts/experiments/run_bcrl_multiseed.py --stage train --gpus 0,1,2,3 --resume --run-id "$RUN_ID"
+python klask_imitation/scripts/experiments/run_bcrl_multiseed.py --stage eval  --gpus 0,1,2,3 --resume --run-id "$RUN_ID"
+python klask_imitation/scripts/experiments/run_bcrl_multiseed.py --stage aggregate --run-id "$RUN_ID"
+python klask_imitation/scripts/plotting/make_fig5.py --run-id "$RUN_ID"
 ```
+
+`run_bcrl_multiseed.py` shells out per job; set `ISAACLAB_ROOT`, and `CONDA_ENV`
+if your Isaac Lab env is not named `env_isaaclab`. `make_fig5.py` defaults to the
+most recent sweep when `--run-id` is omitted.
 
 This runner defaults to `--action-limit 1.0`, the bound behind the published figure.
 Pass `--action-limit 0.2` for the deployment-faithful variant; the run tag records the

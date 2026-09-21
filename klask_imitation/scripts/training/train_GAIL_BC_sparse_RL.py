@@ -63,7 +63,7 @@ class Config:
     # WandB
     wandb_project: str = "klask_dense_rl"
     wandb_entity: Optional[str] = None
-    wandb_mode: str = "online"  # "online" | "offline" | "disabled"
+    wandb_mode: str = "disabled"  # "online" | "offline" | "disabled"
 
     # Training
     total_timesteps: int = 50_000_000
@@ -1464,7 +1464,18 @@ def main() -> None:
 
     template_policy_path = Path(cfg.pretrained_policy_path)
     if not template_policy_path.exists():
-        raise FileNotFoundError(f"Template policy not found: {template_policy_path}")
+        raise FileNotFoundError(
+            f"Template policy not found: {template_policy_path}\n"
+            "Sparse RL needs a BC checkpoint: it supplies the Peg1 network "
+            "architecture, and (with opponent_init_mode=from_pretrained) the "
+            "frozen opponent as well -- for learner_init_mode=random too.\n"
+            "BC run directories are timestamped, so no fixed default can point "
+            "at one. Train a BC policy first:\n"
+            "    python klask_imitation/scripts/training/train_BC_only.py "
+            "--config configs/training/bc_baseline.json\n"
+            "then pass that run's checkpoint explicitly:\n"
+            "    --pretrained-policy-path trained_models/<bc-run>/ppo_policy_bc_final.zip"
+        )
     opponent_policy_path = (
         Path(cfg.fixed_opponent_policy_path)
         if cfg.fixed_opponent_policy_path is not None
@@ -1692,4 +1703,20 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    # Isaac Sim's shutdown path swallows the process exit status, so a crash
+    # here would otherwise be reported as success to any caller (CI, the
+    # experiment launchers, shell scripts). Flush and exit explicitly.
+    import os as _os
+    import sys as _sys
+    import traceback as _tb
+
+    try:
+        main()
+    except BaseException:
+        _tb.print_exc()
+        _sys.stdout.flush()
+        _sys.stderr.flush()
+        _os._exit(1)
+    _sys.stdout.flush()
+    _sys.stderr.flush()
+    _os._exit(0)

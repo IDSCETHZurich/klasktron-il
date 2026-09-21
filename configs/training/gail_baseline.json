@@ -1,5 +1,5 @@
 {
-  "demo_base": "data/expert_trajectories_cleaned",
+  "demo_base": "data/human/trajectories",
   "demo_source_format": "human_raw",
   "save_root": "trained_models",
   "run_tag": "GAIL_BASELINE",

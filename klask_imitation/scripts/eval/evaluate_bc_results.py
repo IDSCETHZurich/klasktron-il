@@ -48,4 +48,17 @@ if __name__ == "__main__":
     _ensure_arg("--peg1-only-fixed-opponent")
     _ensure_arg("--deterministic-opponent")
     _ensure_arg("--seed", str(seed))
-    evaluate_main()
+    import os as _os
+    import sys as _sys
+    import traceback as _tb
+
+    try:
+        evaluate_main()
+    except BaseException:
+        _tb.print_exc()
+        _sys.stdout.flush()
+        _sys.stderr.flush()
+        _os._exit(1)
+    _sys.stdout.flush()
+    _sys.stderr.flush()
+    _os._exit(0)

@@ -31,7 +31,7 @@ DATASET_TIERS = {
     ),
     "augmented": DatasetTier(
         name="augmented",
-        subdir="augmented",
+        subdir="human_augmented",
         steps="325k",
         description="Human demonstrations plus benchmark augmentation.",
     ),
@@ -80,13 +80,51 @@ def _snapshot_download(
         ) from exc
 
     local_dir.mkdir(parents=True, exist_ok=True)
-    return snapshot_download(
+    patterns = list(allow_patterns)
+    result = snapshot_download(
         repo_id=repo_id,
         repo_type="dataset",
-        allow_patterns=list(allow_patterns),
+        allow_patterns=patterns,
         local_dir=str(local_dir),
         revision=revision,
     )
+    _assert_patterns_matched(
+        repo_id=repo_id, patterns=patterns, revision=revision
+    )
+    return result
+
+
+def _assert_patterns_matched(
+    *, repo_id: str, patterns: Iterable[str], revision: str | None
+) -> None:
+    """Raise if a tier pattern matched no files in the remote repo.
+
+    A mismatch between the tier subdir here and the layout on the Hub
+    otherwise downloads nothing and still reports success.
+    """
+    import fnmatch
+
+    try:
+        from huggingface_hub import HfApi
+
+        remote = HfApi().list_repo_files(
+            repo_id, repo_type="dataset", revision=revision
+        )
+    except Exception:  # offline or API change: do not block a good download
+        return
+
+    tier_patterns = [p for p in patterns if p.endswith("/**")]
+    unmatched = [
+        p
+        for p in tier_patterns
+        if not any(fnmatch.fnmatch(f, p) for f in remote)
+    ]
+    if unmatched:
+        raise SystemExit(
+            f"No files in {repo_id} matched: {', '.join(sorted(unmatched))}. "
+            "The dataset layout on the Hub does not match the tier definitions "
+            "in DATASET_TIERS; nothing was downloaded for those tiers."
+        )
 
 
 def download_dataset_tier(

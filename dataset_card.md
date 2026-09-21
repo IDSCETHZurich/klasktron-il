@@ -7,7 +7,7 @@ KlaskTron is a three-tier imitation-learning benchmark for the Klask tabletop ga
 The benchmark exposes three training regimes:
 
 - `human`: about 80k steps from real human play
-- `augmented`: about 325k steps after augmentation of the human set
+- `human_augmented`: about 325k steps after augmentation of the human set (selected as `--tier augmented`)
 - `synthetic`: 5M+ steps generated from synthetic expert rollouts in simulation
 
 ## Dataset Repository Layout
@@ -19,7 +19,7 @@ klasktron/
 ├── human/
 │   ├── trajectories/
 │   └── metadata.json
-├── augmented/
+├── human_augmented/
 │   ├── trajectories/
 │   └── metadata.json
 ├── synthetic/
@@ -60,7 +60,7 @@ Action layout:
 
 Recommended metadata fields per trajectory file or manifest entry:
 
-- `tier`: one of `human`, `augmented`, `synthetic`
+- `tier`: one of `human`, `human_augmented`, `synthetic`
 - `source_format`: one of `human_raw`, `sim_native`
 - `collection_id`: session, run, or generator identifier
 - `episode_count`: number of trajectories stored in the file

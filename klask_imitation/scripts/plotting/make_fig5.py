@@ -81,14 +81,34 @@ def load(run_id):
     return out
 
 
+def _latest_run_id() -> str:
+    """Newest sweep under ART.
+
+    run_bcrl_multiseed.py names its output `camera_ready_<YYYYMMDD>`, so a fixed
+    default here goes stale the day after it is written and the documented
+    four-step sequence stops connecting. Fall back to the most recent sweep.
+    """
+    candidates = [d for d in glob.glob(f"{ART}/*") if os.path.isdir(os.path.join(d, "eval"))]
+    if not candidates:
+        raise SystemExit(
+            f"No sweeps with an eval/ directory under {ART}. "
+            "Run run_bcrl_multiseed.py --stage train/eval first, "
+            "or pass --run-id explicitly."
+        )
+    return os.path.basename(max(candidates, key=os.path.getmtime))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--run-id", default=os.environ.get("KLASKTRON_BCRL_RUN_ID",
-                                                   "camera_ready_a10_20260911"))
+    ap.add_argument("--run-id", default=os.environ.get("KLASKTRON_BCRL_RUN_ID"))
     ap.add_argument("--out", default=os.path.dirname(os.path.abspath(__file__)))
     args = ap.parse_args()
 
-    data = load(args.run_id)
+    run_id = args.run_id or _latest_run_id()
+    print(f"[fig5] run_id={run_id}")
+    os.makedirs(args.out, exist_ok=True)
+
+    data = load(run_id)
     missing = [c for c in ("sparse_random", "sparse_bc", "dense_random", "dense_bc")
                if c not in data]
     if missing:
