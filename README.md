@@ -18,7 +18,7 @@ pip install -e ./klask_imitation[dev,data]
 
 ## Dataset Download
 
-Three tiers: `human` (~80k steps), `augmented` (~325k steps), `synthetic` (5M+ steps).
+Three tiers: `human` (~80k steps), `augmented` (~322k steps), `synthetic` (5M steps).
 
 ```bash
 klasktron-download-data --repo-id KlaskLab/klasktron-il-benchmark --tier human
@@ -38,7 +38,7 @@ with numbers from the other.
 | | `--action-limit` | actuator model | what it is for |
 |---|---|---|---|
 | **Deployment (default)** | `0.2` | on | Matches the physical robot, which clips commands at 0.2 m/s and whose realised velocity is mediated by the learned actuator model. Policies trained this way share the interface the sim-to-real bridge was validated on. |
-| **Paper reproduction** | `1.0` | off | Reproduces the published Table 2 / Fig. 5 / Sec. 5.4 numbers, which were produced before the interface was standardised. |
+| **Paper reproduction** | `1.0` | off for GAIL; always on for BC+RL | Reproduces the published Table 2 / Fig. 5 / Sec. 5.4 numbers, which were produced before the interface was standardised. |
 
 Which knob applies to which method:
 
@@ -48,7 +48,7 @@ Which knob applies to which method:
 | GAIL (`train_gail_sweep.py`) | yes (generator) | yes | yes (`--actuator-model` / `--no-actuator-model`) |
 | BC+RL (`train_GAIL_BC_sparse_RL.py`) | yes (PPO) | yes | always on |
 
-Two details worth knowing:
+Three details worth knowing:
 
 - The bound is applied to the **frozen opponent as well as the learner**, so both
   sides of a match respect the limit the hardware enforces.
@@ -57,6 +57,11 @@ Two details worth knowing:
   head emits raw m/s, so without the rescale a BC-initialised run at 0.2 would start
   at one fifth of the intended command. At `1.0` the rescale is a no-op, which is why
   the published configuration reproduces bit-identically.
+- For BC checkpoints trained on human demonstrations (`ppo_policy_bc_final.zip` with
+  `demo_source_format: human_raw`, or a run name containing `HUMAN_DEMO`), every
+  evaluation script bypasses the actuator model on that policy's side. Tier 1 actions
+  are finite-differenced realised velocities, not commands, so the model is not applied
+  to them. Tier 3 policies are evaluated with the model in the loop.
 
 Examples:
 
@@ -134,9 +139,8 @@ python klask_imitation/scripts/training/train_GAIL_BC_sparse_RL.py --config conf
 
 ### BC+RL 2x2 with error bars (Figure 5)
 
-The published Fig. 5 reports a single training run per condition. The camera-ready
-figure reports five seeds per condition with 95% confidence intervals, every policy
-scored against the same frozen PPO reference opponent (Elo 1283).
+Fig. 5 reports five training seeds per condition with 95% confidence intervals, every
+policy scored against the same frozen PPO reference opponent (Elo 1283).
 
 ```bash
 # 4 conditions x 5 seeds = 20 runs; ~70 min each, one run per GPU
@@ -216,10 +220,10 @@ See [docs/reestimation_integration.md](docs/reestimation_integration.md) for det
 | Figure 4 (discriminator probe) | `run_gail_discriminator_analysis.py` | reproducible |
 | Sec. 5.4 / Figure 5 (BC+RL 2x2) | `run_bcrl_multiseed.py` then `make_fig5.py` | reproducible |
 | Appendix A / B hyperparameters | `configs/training/*.json` | reproducible |
-| Actuator model, +-0.2 m/s identification range | deployed checkpoint ships in `klask_imitation/my_isaaclab_tasks/manager_based/klask/actuator_model/` (md5 `18812843f6f4cb45de2f12ebb879c7d6`) | artifact included; identification data and training code are not part of this release |
+| Actuator model | the deployed checkpoint, `model_odrive_new_estimator_history_10_interval_0.02_delay_0.0_horizon3_with_states.pt` (md5 `18812843f6f4cb45de2f12ebb879c7d6`), ships in `klask_imitation/my_isaaclab_tasks/manager_based/klask/actuator_model/` and is hardcoded in `actuator_model.py`; the other `.pt` files in that directory are superseded identification rounds and are never loaded | artifact included; identification data and training code are not part of this release |
 | Figure 3 (BC data scaling) | training side only, via `train_bc_sweep.py` | **not reproducible** |
 | Table 2 / Table 3, BC and GAIL rows | retrain from the shipped configs | **not reproducible as published** |
-| BC-5M hardware deployment | - | **not in this repository** |
+| Sec. 5.5 (BC-5M hardware deployment) | - | **not in this repository**; runs on the separate robot software stack |
 
 ### The frozen PPO expert
 
@@ -241,8 +245,8 @@ expert's 20-D observation interface and its `clip_actions: 0.2` command bound.
 - **The specific BC and GAIL checkpoints behind Tables 2 and 3** were not preserved.
   The shipped configs retrain equivalent policies, but per-seed numbers will differ from
   the published ones.
-- **The BC-5M zero-shot hardware deployment** reported in the author response runs on the
-  separate robot software stack and is outside this repository.
+- **The BC-5M zero-shot hardware deployment** (Sec. 5.5) runs on the separate robot
+  software stack and is outside this repository.
 - Evaluations in the paper marked as self-play (Tables 2 and 3, BC and GAIL rows) were not
   re-run against the frozen PPO expert; the paper states this explicitly.
 
@@ -257,7 +261,7 @@ klask_imitation/
   scripts/eval/             # evaluation scripts
   scripts/experiments/      # synthetic data, data-wall
   scripts/plotting/         # paper figures (make_fig5.py = Fig. 5)
-  assets/ppo_expert/        # frozen PPO expert (inherited, see [7])
+  assets/ppo_expert/        # frozen PPO expert (inherited from the platform paper, see Citation)
   scripts/tests/play.py     # visualization / play script
 data/                       # datasets (not in git)
 trained_models/             # checkpoints (created at runtime)
